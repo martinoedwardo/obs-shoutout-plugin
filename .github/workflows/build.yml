@@ -26,12 +26,17 @@ jobs:
       - name: Setup cmake
         uses: lukka/get-cmake@latest
 
-      - name: Configure
+      - name: Fetch OBS Dependency (libobs)
+        run: |
+          # We use a known-good pre-built development header set
+          curl -L -o obs-deps.zip https://github.com/obsproject/obs-deps/releases/download/2023-04-14/windows-deps-2023-04-14-x64.zip
+          7z x obs-deps.zip -oobs-sdk
+          
+      - name: Configure CMake
         run: |
           cmake -B build -S . `
-          -Dlibobs_DIR="${{ github.workspace }}/obs-sdk/cmake/libobs" `
-          -DCMAKE_PREFIX_PATH="${{ github.workspace }}/obs-sdk" `
-            -DTWITCH_CLIENT_ID="${{ secrets.TWITCH_CLIENT_ID }}"
+          -DCMAKE_BUILD_TYPE=Release `
+          -DTWITCH_CLIENT_ID="${{ secrets.TWITCH_CLIENT_ID }}"
         env:
           TWITCH_CLIENT_ID: ${{ inputs.twitch_client_id || secrets.TWITCH_CLIENT_ID }}
 
@@ -44,8 +49,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: obs-shoutout-manager-windows-x64
-          path: build/package/
+          name: obs-shoutout-plugin
+          path: build/Release/obs-shoutout-plugin.dll
 
   # ── macOS Universal ────────────────────────────────────────────────────────
   build-macos:
