@@ -28,8 +28,8 @@ jobs:
 
       - name: Fetch OBS Dependency (libobs)
         run: |
-          # We use a known-good pre-built development header set
-          curl -L -o obs-deps.zip https://github.com/obsproject/obs-deps/releases/download/2023-04-14/windows-deps-2023-04-14-x64.zip
+          # Download the OBS dependencies specifically for Windows x64
+          curl -L -o obs-deps.zip https://github.com/obsproject/obs-deps/releases/download/2024-03-22/windows-deps-2024-03-22-x64.zip
           7z x obs-deps.zip -oobs-sdk
           
       - name: Configure CMake
