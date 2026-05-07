@@ -1,0 +1,147 @@
+name: Build Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      twitch_client_id:
+        description: 'Twitch Client ID (overrides secret)'
+        required: false
+
+jobs:
+  # ── Windows x64 ────────────────────────────────────────────────────────────
+  build-windows:
+    name: Windows x64
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v1
+
+      - name: Setup cmake
+        uses: lukka/get-cmake@latest
+
+      - name: Configure
+        run: |
+          cmake -B build `
+            --preset windows-x64 `
+            -DTWITCH_CLIENT_ID="${{ secrets.TWITCH_CLIENT_ID }}"
+        env:
+          TWITCH_CLIENT_ID: ${{ inputs.twitch_client_id || secrets.TWITCH_CLIENT_ID }}
+
+      - name: Build
+        run: cmake --build build --preset windows-x64 --config RelWithDebInfo
+
+      - name: Package
+        run: cmake --build build --preset windows-x64 --config RelWithDebInfo --target package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-shoutout-manager-windows-x64
+          path: build/package/
+
+  # ── macOS Universal ────────────────────────────────────────────────────────
+  build-macos:
+    name: macOS Universal
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup cmake
+        uses: lukka/get-cmake@latest
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            --preset macos \
+            -DTWITCH_CLIENT_ID="${{ secrets.TWITCH_CLIENT_ID }}"
+        env:
+          TWITCH_CLIENT_ID: ${{ inputs.twitch_client_id || secrets.TWITCH_CLIENT_ID }}
+
+      - name: Build
+        run: cmake --build build --preset macos --config RelWithDebInfo
+
+      - name: Package
+        run: cmake --build build --preset macos --config RelWithDebInfo --target package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-shoutout-manager-macos-universal
+          path: build/package/
+
+  # ── Linux x86_64 ──────────────────────────────────────────────────────────
+  build-linux:
+    name: Linux x86_64
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build \
+            libobs-dev \
+            qt6-base-dev \
+            libqt6network6 \
+            qt6-base-private-dev
+
+      - name: Configure
+        run: |
+          cmake -B build \
+            --preset linux-x86_64 \
+            -DTWITCH_CLIENT_ID="${{ secrets.TWITCH_CLIENT_ID }}"
+        env:
+          TWITCH_CLIENT_ID: ${{ inputs.twitch_client_id || secrets.TWITCH_CLIENT_ID }}
+
+      - name: Build
+        run: cmake --build build --preset linux-x86_64
+
+      - name: Package
+        run: cmake --build build --preset linux-x86_64 --target package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-shoutout-manager-linux-x86_64
+          path: build/package/
+
+  # ── GitHub Release ─────────────────────────────────────────────────────────
+  release:
+    name: Create Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Zip each platform
+        run: |
+          cd artifacts
+          for dir in */; do
+            zip -r "${dir%/}.zip" "$dir"
+          done
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
